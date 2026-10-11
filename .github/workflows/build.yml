@@ -1,0 +1,48 @@
+name: Build 3DS
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends curl unzip git cmake g++ make ca-certificates
+          dkp-pacman -Sy --needed --noconfirm 3ds-dev
+
+      - name: Build 3dsx
+        run: make
+
+      - name: Get makerom
+        continue-on-error: true
+        run: |
+          curl -fL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip
+          unzip -o makerom.zip -d mr
+          install -m 755 "$(find mr -type f -name 'makerom*' | head -n1)" /usr/local/bin/makerom
+
+      - name: Build bannertool
+        continue-on-error: true
+        run: |
+          git clone --depth 1 https://github.com/RedTopper/bannertool.git bt
+          cmake -S bt -B bt/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build bt/build
+          install -m 755 "$(find bt/build -type f -name bannertool | head -n1)" /usr/local/bin/bannertool
+
+      - name: Build cia
+        continue-on-error: true
+        run: make cia
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SnakeCubos
+          path: |
+            *.3dsx
+            *.cia
+          if-no-files-found: warn
